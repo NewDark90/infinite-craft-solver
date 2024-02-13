@@ -7,9 +7,21 @@ import { nodeResolve } from '@rollup/plugin-node-resolve';
 const clientOptions = {
     input: 'src/main.ts',
     output: {
-        file: `dist/tamper-scripts.js`,
+        file: `dist/craft-db.js`,
         format: "umd",
-        name: "tamperScripts"
+        name: "tamperScripts",
+        banner: `
+// ==UserScript==
+// @name         Craft Database
+// @namespace    http://tampermonkey.net/
+// @version      2024-02-13
+// @description  try to take over the world!
+// @author       You
+// @match        https://neal.fun/infinite-craft/
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=neal.fun
+// @grant        none
+// ==/UserScript==
+`
     },
     plugins: [
         del({ targets: `dist/*` }),
