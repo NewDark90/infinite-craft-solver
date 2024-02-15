@@ -2,7 +2,7 @@ import { CraftApi } from "./craft-api";
 import { CraftDatabase } from "./craft-database";
 import { CraftElement } from "./elements-store.config";
 import { TimeframeSleeper } from "./timeframe-sleeper";
-import { delay } from "./utility";
+import { delay, getRandomNumber } from "./utility";
 
 export interface CraftManagerRunConfig {
     continue: boolean; 
@@ -10,6 +10,8 @@ export interface CraftManagerRunConfig {
 }
 
 export class CraftManager {
+
+    #numberRegex = /^-?[0-9][0-9,\.]+$/;
 
     /**
      *
@@ -31,7 +33,11 @@ export class CraftManager {
 
     #randomizeCraftElements(elements: CraftElement[]): string[] {
         return elements
-            .map(el => ({ text: el.text, sort: Math.random() }))
+            .filter(el => !this.#numberRegex.test(el.text))
+            .map(el => ({ 
+                text: el.text, 
+                sort: getRandomNumber(0, 250) + el.text.length 
+            }))
             .sort((a,b) => a.sort - b.sort)
             .map(el => el.text);
     }
@@ -73,7 +79,7 @@ export class CraftManager {
                             await delay(config.delay)
                         }
                     }
-                    await Promise.all(promises);
+                    //await Promise.all(promises);
                     await this.syncStorage();
                 }
                 resolve(true);
@@ -107,7 +113,7 @@ export class CraftManager {
                         promises.push(this.solveSingle(firstId, secondId));
                         await delay(config.delay)
                     }
-                    await Promise.all(promises);
+                    //await Promise.all(promises);
                     await this.syncStorage();
                 }
                 resolve(true);
