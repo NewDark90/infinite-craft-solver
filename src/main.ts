@@ -1,10 +1,8 @@
-import { CraftDatabase } from "./craft-database";
+import { CraftManager } from "./craft-manager";
 
 const main = () => {
-    (globalThis as any).run = () => {
-        const craftDatabase = new CraftDatabase();
-        craftDatabase.init();
-    }
+    const craftManager = new CraftManager();
+    (globalThis as any).craftManager = craftManager;
 };
 
 main();

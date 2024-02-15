@@ -1,4 +1,4 @@
-import { comboStoreConfig } from "./combo-store.config";
+import { CraftCombination, comboStoreConfig, sortCombination } from "./combo-store.config";
 import { CraftElement, elementsStore } from "./elements-store.config";
 
 
@@ -8,30 +8,36 @@ export class CraftDatabase {
 
     private readonly version = 1;
     private readonly databaseName = "craft-db"
-    private database?: IDBDatabase;
+    private database?: Promise<IDBDatabase>;
 
     constructor(
 
     ) {
-
     }
 
-    init() {
-        const openRequest = indexedDB.open(this.databaseName, this.version);
-
-        openRequest.addEventListener("upgradeneeded", (event) => {
-            this.database = openRequest.result;
-            this.database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
-            this.database.createObjectStore(elementsStore.name, elementsStore.parameters);
-        }) ;
-        openRequest.addEventListener("success", (event) => {
-            console.log('running onsuccess');
-            this.database = openRequest.result;
-            this.syncStorage();
-        });
-        openRequest.addEventListener("error", (event) => {
-            console.error(event);
-        });
+    async open(): Promise<IDBDatabase> {
+        if (!this.database) {
+            this.database = new Promise<IDBDatabase>((resolve, reject) => {
+                const openRequest = indexedDB.open(this.databaseName, this.version);
+    
+                openRequest.addEventListener("upgradeneeded", (event) => {
+                    const database = openRequest.result;
+                    database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
+                    database.createObjectStore(elementsStore.name, elementsStore.parameters);
+                    resolve(database);
+                }) ;
+                openRequest.addEventListener("success", (event) => {
+                    console.log('running onsuccess');
+                    const database = openRequest.result;
+                    resolve(database);
+                });
+                openRequest.addEventListener("error", (event) => {
+                    console.error(event);
+                    reject(event);
+                });
+            });
+        }
+        return this.database;
     }
 
     getLocalStorageElements(): CraftElement[] {
@@ -44,49 +50,94 @@ export class CraftDatabase {
         });
     }
 
-    private async syncStorage() {
-        const allPromises: Promise<any>[] = []
-        const localElements = this.getLocalStorageElements();
+    async getElement(element: string): Promise<CraftElement> {
+        const database = await this.open();
+        const transaction = database.transaction(elementsStore.name, "readonly");
+        const elementStore = transaction.objectStore(elementsStore.name);
+        const getPromise = new Promise<CraftElement>(
+            (resolve, reject) => {
+                const getRequest: IDBRequest<CraftElement> = elementStore.get(element);
+                getRequest.onsuccess = (_event) => {
+                    resolve(getRequest.result);
+                };
+                getRequest.onerror = (event) => {
+                    console.error(event);
+                    reject(event);
+                };
+            }
+        );
+        return getPromise;
+    }
 
-        const transaction = this.database!.transaction(elementsStore.name, "readwrite");
+    async saveElement(element: CraftElement) {
+        if (!element) {
+            return;
+        }
+        const database = await this.open();
+        const transaction = database.transaction(elementsStore.name, "readwrite");
         const elementStore = transaction.objectStore(elementsStore.name);
 
-        for (const localElement of localElements) {
-            const getPromise = new Promise<{ localElement: CraftElement, foundResult?: CraftElement}>(
-                (resolve, reject) => {
-                    const getRequest: IDBRequest<CraftElement> = elementStore.get(localElement.text);
-                    getRequest.onsuccess = (_event) => {
-                        resolve({
-                            localElement: localElement,
-                            foundResult: getRequest.result
-                        });
-                    };
-                    getRequest.onerror = (event) => {
-                        console.error(event);
-                        reject(event);
-                    };
-                }
-            ).then(({localElement, foundResult}) => {
-                const savePromise = new Promise<CraftElement>((resolve, reject) => {
-                    if (!foundResult) {
-                        const addRequest = elementStore.add(localElement);
-                        addRequest.onsuccess = () => {
-                            resolve(localElement);
-                        }
-                        addRequest.onerror = (err) => {
-                            reject(err);
-                        }
-                    }
-                    else {
-                        resolve(localElement);
-                    }
-                });
-                return savePromise;
+        const savePromise = new Promise<CraftElement>((resolve, reject) => {
+            const addRequest = elementStore.add(element);
+            addRequest.onsuccess = () => {
+                console.log("Element added to database!", element);
+                resolve(element);
+            }
+            addRequest.onerror = (err) => {
+                reject(err);
+            }
+        });
+        return savePromise;
+    }
+    
+    async getAllElements(): Promise<CraftElement[]> {
+        const database = await this.open();
+        const transaction = database.transaction(elementsStore.name, "readonly");
+        const elementStore = transaction.objectStore(elementsStore.name);
+        
+        const getAllPromise = new Promise<CraftElement[]>((resolve, reject) => {
+            const getAllRequest: IDBRequest<CraftElement[]> = elementStore.getAll();
+            getAllRequest.addEventListener("success", (event) => {
+                resolve(getAllRequest.result);
             });
+            getAllRequest.addEventListener("error", (event) => {
+                reject(event);
+            });
+        });
+        return getAllPromise;
+    }
 
-            allPromises.push(getPromise);
-        }
+    async getCombination(first: string, second: string): Promise<CraftCombination> {
+        const database = await this.open();
+        const transaction = database.transaction(comboStoreConfig.name, "readonly");
+        const comboStore = transaction.objectStore(comboStoreConfig.name);
+        const ids = [first, second].sort();
+        const getPromise = new Promise<CraftCombination>((resolve, reject) => {
+            const getRequest: IDBRequest<CraftCombination> = comboStore.get(ids);
+            getRequest.addEventListener("success", (event) => {
+                resolve(getRequest.result);
+            });
+            getRequest.addEventListener("error", (event) => {
+                reject(event);
+            });
+        });
+        return getPromise;
+    }
 
-        await Promise.all(allPromises);
+    async saveCombination(combo: CraftCombination): Promise<CraftCombination> {
+        const database = await this.open();
+        const transaction = database.transaction(comboStoreConfig.name, "readwrite");
+        const comboStore = transaction.objectStore(comboStoreConfig.name);
+        sortCombination(combo);
+        const savePromise = new Promise<CraftCombination>((resolve, reject) => {
+            const saveRequest = comboStore.add(combo);
+            saveRequest.addEventListener("success", (event) => {
+                resolve(combo);
+            });
+            saveRequest.addEventListener("error", (event) => {
+                reject(event);
+            });
+        });
+        return savePromise;
     }
 }
