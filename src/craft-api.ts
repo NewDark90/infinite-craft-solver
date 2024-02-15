@@ -5,13 +5,24 @@ export interface ApiResult {
 }
 
 export class CraftApi {
+
+    #timeout = 1000 * 10;
+
     constructor() {
         
     }
 
     async pair(first: string, second: string): Promise<{ response: Response, data: ApiResult }> {
         const ids = [first, second].sort();
-        const response = await fetch(`https://neal.fun/api/infinite-craft/pair?first=${encodeURIComponent(ids[0])}&second=${encodeURIComponent(ids[1])}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.#timeout)
+        const response = await fetch(
+            `https://neal.fun/api/infinite-craft/pair?first=${encodeURIComponent(ids[0])}&second=${encodeURIComponent(ids[1])}`,
+            {
+                signal: controller.signal
+            }
+        );
+        clearTimeout(timeoutId);
         const data: ApiResult = await response.json();
 
         return {
