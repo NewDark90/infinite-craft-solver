@@ -4,9 +4,17 @@ export interface ApiResult {
     isNew: boolean;
 }
 
+export class HttpResponseError extends Error {
+    constructor(
+        public response: Response
+    ) {
+        super("Http Response did not indicate success.");
+    }
+}
+
 export class CraftApi {
 
-    #timeout = 1000 * 10;
+    #timeout = 1000 * 60 * 5;
 
     constructor() {
         
@@ -23,6 +31,11 @@ export class CraftApi {
             }
         );
         clearTimeout(timeoutId);
+        if (!response.ok) {
+            console.error(response);
+            throw new HttpResponseError(response);
+        }
+
         const data: ApiResult = await response.json();
 
         return {

@@ -6,7 +6,7 @@ import { CraftElement, elementsStore } from "./elements-store.config";
 
 export class CraftDatabase {
 
-    private readonly version = 1;
+    private readonly version = 2;
     private readonly databaseName = "craft-db"
     private database?: Promise<IDBDatabase>;
 
@@ -22,8 +22,15 @@ export class CraftDatabase {
     
                 openRequest.addEventListener("upgradeneeded", (event) => {
                     const database = openRequest.result;
-                    database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
-                    database.createObjectStore(elementsStore.name, elementsStore.parameters);
+                    console.log(`Upgrading database from ${event.oldVersion} to version ${event.newVersion}`);
+                    const comboStore = database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
+                    const elementStore = database.createObjectStore(elementsStore.name, elementsStore.parameters);
+                    comboStore.createIndex("first", "first" satisfies keyof CraftCombination, {unique: false});
+                    comboStore.createIndex("second", "second" satisfies keyof CraftCombination, {unique: false});
+                    comboStore.createIndex("result", "result" satisfies keyof CraftCombination, {unique: false});
+                    elementStore.createIndex("text", "text" satisfies keyof CraftElement, {unique: false});
+                    elementStore.createIndex("emoji", "emoji" satisfies keyof CraftElement, {unique: false});
+                    elementStore.createIndex("discovered", "discovered" satisfies keyof CraftElement, {unique: false});
                     resolve(database);
                 }) ;
                 openRequest.addEventListener("success", (event) => {
