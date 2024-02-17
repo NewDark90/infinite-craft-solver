@@ -2,7 +2,11 @@ import { CraftCombination, comboStoreConfig, sortCombination } from "./combo-sto
 import { CraftElement, elementsStore } from "./elements-store.config";
 
 
-
+export interface IDbStats {
+    comboCount: number;
+    elementCount: number;
+    discoveryCount: number;
+}
 
 export class CraftDatabase {
 
@@ -23,18 +27,21 @@ export class CraftDatabase {
                 openRequest.addEventListener("upgradeneeded", (event) => {
                     const database = openRequest.result;
                     console.log(`Upgrading database from ${event.oldVersion} to version ${event.newVersion}`);
-                    const comboStore = database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
-                    const elementStore = database.createObjectStore(elementsStore.name, elementsStore.parameters);
-                    comboStore.createIndex("first", "first" satisfies keyof CraftCombination, {unique: false});
-                    comboStore.createIndex("second", "second" satisfies keyof CraftCombination, {unique: false});
-                    comboStore.createIndex("result", "result" satisfies keyof CraftCombination, {unique: false});
-                    elementStore.createIndex("text", "text" satisfies keyof CraftElement, {unique: false});
-                    elementStore.createIndex("emoji", "emoji" satisfies keyof CraftElement, {unique: false});
-                    elementStore.createIndex("discovered", "discovered" satisfies keyof CraftElement, {unique: false});
-                    resolve(database);
-                }) ;
+                    if (event.oldVersion < 1) {
+                         database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
+                         database.createObjectStore(elementsStore.name, elementsStore.parameters);
+                    }
+                    if (event.oldVersion < 2) {
+                        const comboStore = openRequest.transaction!.objectStore(comboStoreConfig.name);
+                        const elementStore = openRequest.transaction!.objectStore(elementsStore.name);
+                        comboStore.createIndex("first", "first" satisfies keyof CraftCombination, {unique: false});
+                        comboStore.createIndex("second", "second" satisfies keyof CraftCombination, {unique: false});
+                        comboStore.createIndex("result", "result" satisfies keyof CraftCombination, {unique: false});
+                        elementStore.createIndex("emoji", "emoji" satisfies keyof CraftElement, {unique: false});
+                    }
+                });
                 openRequest.addEventListener("success", (event) => {
-                    console.log('running onsuccess');
+                    console.log('Open Database success!');
                     const database = openRequest.result;
                     resolve(database);
                 });
@@ -146,5 +153,44 @@ export class CraftDatabase {
             });
         });
         return savePromise;
+    }
+
+    async getStats(): Promise<IDbStats> {
+        const database = await this.open();
+        const transaction = database.transaction([comboStoreConfig.name, elementsStore.name], "readonly");
+        const comboStore = transaction.objectStore(comboStoreConfig.name);
+        const elementStore = transaction.objectStore(elementsStore.name);
+        const comboCountPromise = new Promise<number>((resolve, reject) => {
+            const request = comboStore.count();
+            request.addEventListener("success", (event) => resolve(request.result));
+            request.addEventListener("error", (err) => reject(err));
+        });
+        const elementCountPromise = new Promise<number>((resolve, reject) => {
+            const request = elementStore.count();
+            request.addEventListener("success", (event) => resolve(request.result));
+            request.addEventListener("error", (err) => reject(err));
+        });
+        const elementDiscoveryCountPromise = new Promise<number>((resolve, reject) => {
+            let discoverCount = 0;
+            const request = elementStore.openCursor();
+            request.addEventListener("success", (event) => {
+                if (request.result) {
+                    discoverCount += (request.result.value as CraftElement).discovered ? 1 : 0;
+                    request.result.continue();
+                    return;
+                }
+                resolve(discoverCount)
+            });
+            request.addEventListener("error", (err) => reject(err));
+        });
+
+        const [comboCount, elementCount, discoveryCount] = await Promise.all(
+            [comboCountPromise, elementCountPromise, elementDiscoveryCountPromise]
+        );
+        return {
+            comboCount,
+            elementCount,
+            discoveryCount
+        };
     }
 }
