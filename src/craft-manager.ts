@@ -44,9 +44,13 @@ export class CraftManager {
                 //Smaller number = more likely
                 let sort = getRandomNumber(0, 1000);
                 //Change the likelihood of using some elements over others.
+                // Larger words are likely to be more gibberish. The longer, the worse.
                 sort += el.text.length * 1.5;
+                // If the game can't figure out what kind of emoji makes sense, it's probably a non-sense word.
                 sort += el.emoji === '🤔' ? 100 : 0;
+                // Most normal elements will have been discovered. Best to slightly de-prioritize slightly.
                 sort += el.discovered === true ? 25 : 0;
+                // Numbers combine like rabbits, and make weird combinations 
                 sort += this.#hasNumberRegex.test(el.text) ? 25 : 0;
                 // I don't know if there's something with my data, or if Infinite Craft is just really likes to craft nonsense words with "Jew" in the name.
                 // Either way, I want to de-prioritize it.
