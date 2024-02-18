@@ -48,6 +48,9 @@ export class CraftManager {
                 sort += el.emoji === '🤔' ? 100 : 0;
                 sort += el.discovered === true ? 25 : 0;
                 sort += this.#hasNumberRegex.test(el.text) ? 25 : 0;
+                // I don't know if there's something with my data, or if Infinite Craft is just really likes to craft nonsense words with "Jew" in the name.
+                // Either way, I want to de-prioritize it.
+                sort += (/jew/i).test(el.text) ? 50 : 0; 
                 return {
                     text: el.text,
                     sort
