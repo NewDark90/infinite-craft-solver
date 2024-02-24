@@ -28,7 +28,6 @@ export class CraftManager {
 
     }
 
-    #defaultPageSize = 25;
     #defaultConfig = (): Pick<CraftManagerRunConfig, 'continue' | 'delay'> => {
         return {
             continue: true,
@@ -85,31 +84,32 @@ export class CraftManager {
 
         config.promise = new Promise(async (resolve, reject) => {
             try {
+                let hasBeenRejected = false;
                 await this.syncStorage();
                 while(config!.continue) {
                     const allElements = await this.craftDatabase.getAllElements();
-                    const firstIds = this.#randomizeCraftElements(allElements).slice(0, this.#defaultPageSize);
-                    const secondIds = this.#randomizeCraftElements(allElements).slice(0, this.#defaultPageSize);
+                    const numberToProcess = Math.max(allElements.length * 0.25, 100)
+                    const firstIds = this.#randomizeCraftElements(allElements).slice(0, numberToProcess);
+                    const secondIds = this.#randomizeCraftElements(allElements).slice(0, numberToProcess);
+                    for(let i = 0; i < numberToProcess; i++) {
+                        if (!config!.continue) 
+                            break;
+                        const firstId = firstIds[i];
+                        const secondId = secondIds[i];
 
-                    for (const firstId of firstIds) {
-                        for (const secondId of secondIds) {
-                            if (!config!.continue) 
-                                break;
-
-                            let hasBeenRejected = false;
-                            this.solveSingle(firstId, secondId).catch((err: Error) => {
-                                if (err instanceof DOMException) {
-                                    //Api hit timed out, it's fine.
-                                    return; 
-                                }
-                                
-                                if (!hasBeenRejected) {
-                                    config!.continue = false;
-                                    reject(err);
-                                }
-                            });
-                            await delay(config!.delay)
-                        }
+                        this.solveSingle(firstId, secondId).catch((err: Error) => {
+                            if (err instanceof DOMException) {
+                                //Api hit timed out, it's fine.
+                                return; 
+                            }
+                            
+                            if (!hasBeenRejected) {
+                                config!.continue = false;
+                                hasBeenRejected = true;
+                                reject(err);
+                            }
+                        });
+                        await delay(config!.delay)
                     }
                     //await Promise.all(promises);
                 }
