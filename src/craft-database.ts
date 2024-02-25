@@ -10,7 +10,7 @@ export interface IDbStats {
 
 export class CraftDatabase {
 
-    private readonly version = 2;
+    private readonly version = 3;
     private readonly databaseName = "craft-db"
     private database?: Promise<IDBDatabase>;
 
@@ -39,6 +39,13 @@ export class CraftDatabase {
                         comboStore.createIndex("result", "result" satisfies keyof CraftCombination, {unique: false});
                         elementStore.createIndex("emoji", "emoji" satisfies keyof CraftElement, {unique: false});
                     }
+                    if (event.oldVersion < 3) {
+                        const comboStore = openRequest.transaction!.objectStore(comboStoreConfig.name);
+                        const elementStore = openRequest.transaction!.objectStore(elementsStore.name);
+                        comboStore.createIndex("createdStamp", "createdStamp" satisfies keyof CraftCombination, {unique: false});
+                        elementStore.createIndex("createdStamp", "createdStamp" satisfies keyof CraftElement, {unique: false});
+                    }
+                    
                 });
                 openRequest.addEventListener("success", (event) => {
                     console.log('Open Database success!');
@@ -91,6 +98,7 @@ export class CraftDatabase {
         const transaction = database.transaction(elementsStore.name, "readwrite");
         const elementStore = transaction.objectStore(elementsStore.name);
 
+        element.createdStamp = Date.now();
         const savePromise = new Promise<CraftElement>((resolve, reject) => {
             const addRequest = elementStore.add(element);
             addRequest.onsuccess = () => {
@@ -143,6 +151,7 @@ export class CraftDatabase {
         const transaction = database.transaction(comboStoreConfig.name, "readwrite");
         const comboStore = transaction.objectStore(comboStoreConfig.name);
         sortCombination(combo);
+        combo.createdStamp = Date.now();
         const savePromise = new Promise<CraftCombination>((resolve, reject) => {
             const saveRequest = comboStore.add(combo);
             saveRequest.addEventListener("success", (event) => {

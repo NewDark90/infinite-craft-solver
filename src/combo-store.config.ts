@@ -4,6 +4,7 @@ export interface CraftCombination {
     first: string;
     second: string;
     result: string;
+    createdStamp?: number;
 }
 
 export const comboStoreConfig: DbStoreConfig = {

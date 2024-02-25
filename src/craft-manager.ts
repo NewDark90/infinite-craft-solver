@@ -181,38 +181,41 @@ export class CraftManager {
             }
         });
 
-        return config as CraftManagerRunConfig;;
+        return config as CraftManagerRunConfig;
     }
 
     private async solveSingle(firstId: string, secondId: string) {
         const foundCombo = await this.craftDatabase.getCombination(firstId, secondId);
 
-        if (!foundCombo) {
-            console.log(`New combination: ${firstId}, ${secondId}...`)
-            const comboResult = (await this.craftApi.pair(firstId, secondId)).data;
-            await this.craftDatabase.saveCombination({
-                first: firstId,
-                second: secondId,
-                result: comboResult.result
-            });
-            console.log(`Crafted ${comboResult.emoji} ${comboResult.result}...`);
+        if (foundCombo) {
+            console.log(`%c Skipping ${firstId}, ${secondId}`, 'font-size: 0.75rem; color: #888888');
+            return;
+        }
+        
+        console.log(`New combination: ${firstId}, ${secondId}...`)
+        const comboResult = (await this.craftApi.pair(firstId, secondId)).data;
+        await this.craftDatabase.saveCombination({
+            first: firstId,
+            second: secondId,
+            result: comboResult.result
+        });
+        console.log(`Crafted ${comboResult.emoji} ${comboResult.result} - [${firstId}, ${secondId}]`);
 
-            if (comboResult.result && comboResult.result != "Nothing") {
-                const resultElement = await this.craftDatabase.getElement(comboResult.result);
-                if (!resultElement) {
-                    if (comboResult.isNew) {
-                        console.log(`%c NEW DISCOVERY! ${comboResult.emoji} ${comboResult.result}`, 'font-weight: bold; font-size: 1.5rem; color: #00FF00');
-                    }
-                    else {
-                        console.log(`%c New element! ${comboResult.emoji} ${comboResult.result}`, 'font-weight: bold; color: #5555FF');
-                    }
-
-                    await this.craftDatabase.saveElement({
-                        text: comboResult.result,
-                        discovered: comboResult.isNew,
-                        emoji: comboResult.emoji,
-                    });
+        if (comboResult.result && comboResult.result != "Nothing") {
+            const resultElement = await this.craftDatabase.getElement(comboResult.result);
+            if (!resultElement) {
+                if (comboResult.isNew) {
+                    console.log(`%c NEW DISCOVERY! ${comboResult.emoji} ${comboResult.result}`, 'font-weight: bold; font-size: 1.5rem; color: #00FF00');
                 }
+                else {
+                    console.log(`%c New element! ${comboResult.emoji} ${comboResult.result}`, 'font-weight: bold; color: #5555FF');
+                }
+
+                await this.craftDatabase.saveElement({
+                    text: comboResult.result,
+                    discovered: comboResult.isNew,
+                    emoji: comboResult.emoji,
+                });
             }
         }
     }

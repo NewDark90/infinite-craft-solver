@@ -4,6 +4,7 @@ export interface CraftElement {
     text: string;
     emoji: string;
     discovered: boolean;
+    createdStamp?: number;
 }
 
 export const elementsStore: DbStoreConfig = {
