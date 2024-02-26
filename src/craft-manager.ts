@@ -138,7 +138,8 @@ export class CraftManager {
                                 reject(err);
                             }
                         });
-                        await delay(config.delay)
+                        await delay(config.delay); 
+                        //TODO don't delay if solved from db.
                     }
                     //await Promise.all(promises);
                 }
@@ -216,7 +217,17 @@ export class CraftManager {
         const foundCombo = await this.craftDatabase.getCombination(firstId, secondId);
 
         if (foundCombo) {
-            console.log(`%c Skipping ${firstId}, ${secondId}`, 'font-size: 0.75rem; color: #888888');
+            const foundElement = await this.craftDatabase.getElement(foundCombo.result.text);
+            if (foundElement) {
+                console.log(`%c Skipping ${firstId}, ${secondId}`, 'font-size: 0.75rem; color: #888888');
+            } else {
+                console.log(`%c Saving from combination ${firstId}, ${secondId}`, 'font-size: 0.9rem; color: #EEEEEE');
+                await this.craftDatabase.saveElement({
+                    ...foundCombo.result,
+                    createdStamp: Date.now()
+                });
+            }
+
             return;
         }
         
@@ -227,21 +238,15 @@ export class CraftManager {
             second: secondId,
             result: {
                 text: comboResult.result,
-                emoji: comboResult.emoji
+                emoji: comboResult.emoji,
+                discovered: comboResult.isNew,
+                createdStamp: Date.now()
             }
         });
-        console.log(`Crafted ${comboResult.emoji} ${comboResult.result} - [${firstId}, ${secondId}]`);
 
         if (isValidElementString(comboResult.result)) {
             const resultElement = await this.craftDatabase.getElement(comboResult.result);
             if (!resultElement) {
-                if (comboResult.isNew) {
-                    console.log(`%c NEW DISCOVERY! ${comboResult.emoji} ${comboResult.result}`, 'font-weight: bold; font-size: 1.5rem; color: #00FF00');
-                }
-                else {
-                    console.log(`%c New element! ${comboResult.emoji} ${comboResult.result}`, 'font-weight: bold; color: #5555FF');
-                }
-
                 await this.craftDatabase.saveElement({
                     text: comboResult.result,
                     discovered: comboResult.isNew,

@@ -1,10 +1,9 @@
+import { CraftElement } from ".";
+
 export interface CraftCombination {
     first: string;
     second: string;
-    result: {
-        text: string;
-        emoji: string;
-    };
+    result: CraftElement;
     createdStamp?: number;
 };
 
