@@ -20,8 +20,11 @@ export const elementsStore: DbStoreConfig = {
     }
 };
 
-export const nothingElement = 'Nothing' as const;
+export const nothing = {
+    text: 'Nothing',
+    emoji: ""
+} as const;
 
 export const isValidElementString = (element: any): boolean => {
-    return ( typeof element === 'string' &&  element !== nothingElement );
+    return ( typeof element === 'string' &&  element !== nothing.text );
 } 

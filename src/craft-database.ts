@@ -1,5 +1,5 @@
 import { CraftCombination, comboStoreConfig, sortCombination } from "./combo-store.config";
-import { CraftElement, LocalStorageCraftElement, elementsStore, isValidElementString, nothingElement } from "./elements-store.config";
+import { CraftElement, LocalStorageCraftElement, elementsStore, isValidElementString, nothing } from "./elements-store.config";
 
 
 export interface IDbStats {
@@ -223,15 +223,21 @@ export class CraftDatabase {
                 const combo = cursor.value as CraftCombination | null; 
                 if (combo && isValidElementString(combo?.result)) {
                     const comboResultText = combo?.result as unknown as string;
-                    const element = elementMap.get(comboResultText);
-                    if (!element) {
-                        console.log(`Didn't find '${comboResultText}' in elements.`);
-                        cursor.continue();
-                        return;
-                    }
-                    combo.result = {
-                        emoji: element.emoji,
-                        text: element.text
+                    if (comboResultText === nothing.text) {
+                        combo.result = {
+                            ...nothing
+                        }
+                    } else {
+                        const element = elementMap.get(comboResultText);
+                        if (!element) {
+                            console.log(`Didn't find '${comboResultText}' in elements.`);
+                            cursor.continue();
+                            return;
+                        }
+                        combo.result = {
+                            emoji: element.emoji,
+                            text: element.text
+                        }
                     }
                     const updateRequest = cursor.update(combo);
                     updateRequest.addEventListener('success', ()=> { console.log('Fixed', combo); })
