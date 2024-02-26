@@ -3,7 +3,10 @@ import { DbStoreConfig } from "./db-store.config";
 export interface CraftCombination {
     first: string;
     second: string;
-    result: string;
+    result: {
+        text: string;
+        emoji: string;
+    };
     createdStamp?: number;
 }
 

@@ -7,9 +7,21 @@ export interface CraftElement {
     createdStamp?: number;
 }
 
+export interface LocalStorageCraftElement {
+    text: string;
+    emoji: string;
+    discovered: boolean;
+}
+
 export const elementsStore: DbStoreConfig = {
     name: "elements",
     parameters: {
         keyPath: 'text'
     }
 };
+
+export const nothingElement = 'Nothing' as const;
+
+export const isValidElementString = (element: any): boolean => {
+    return ( typeof element === 'string' &&  element !== nothingElement );
+} 

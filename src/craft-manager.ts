@@ -1,7 +1,6 @@
 import { CraftApi, HttpResponseError } from "./craft-api";
 import { CraftDatabase } from "./craft-database";
-import { CraftElement } from "./elements-store.config";
-import { TimeframeSleeper } from "./timeframe-sleeper";
+import { CraftElement, isValidElementString, nothingElement } from "./elements-store.config";
 import { delay, getRandomNumber } from "./utility";
 
 export interface CraftManagerRunConfig {
@@ -9,61 +8,89 @@ export interface CraftManagerRunConfig {
     delay: number; 
     promise: Promise<any>;
 }
-export interface CraftManagerInfiniteRunConfig {
-    currentConfig: CraftManagerRunConfig;
+
+export interface CraftManagerConfig {
+    /** Change the likelihood of using some elements over others.
+     *  Smaller number = more likely */
+    elementSort: CraftManager['defaultElementSort'];
+    /** Choose how you want to set up a "chunk" to process. */
+    numberToProcess: number | ((totalElements: number) => number);
+    /** Pull localStorage into IndexedDB, and sync IndexedDB back into localStorage. */
+    skipSync: boolean;
 }
 
 export class CraftManager {
-
     #numberRegex = /^-?[0-9][0-9,\.]*$/;
     #hasNumberRegex = /[0-9]+/;
 
-    /**
-     *
-     */
+    managerConfig: CraftManagerConfig;
+
     constructor(
+        managerConfig?: Partial<CraftManagerConfig>,
         private craftDatabase = new CraftDatabase(),
         private craftApi = new CraftApi()
     ) {
-
+        this.managerConfig = this.#mergeConfig(managerConfig);
     }
 
-    #defaultConfig = (): Pick<CraftManagerRunConfig, 'continue' | 'delay'> => {
+    #getDefaultConfig = (): Omit<CraftManagerRunConfig, 'promise'> => {
         return {
             continue: true,
             delay: 1000,
         };
     }
 
+    #mergeConfig(managerConfig: Partial<CraftManagerConfig> | undefined): CraftManagerConfig {
+        return {
+            ...{ 
+                elementSort: this.defaultElementSort,
+                numberToProcess: (length) => Math.max(length * 0.25, 100),
+                skipSync: false,
+            } satisfies CraftManagerConfig, 
+            ...managerConfig
+        };
+    }
+
+    #mergeUserConfig = (config: Partial<CraftManagerRunConfig> | undefined): CraftManagerRunConfig => {
+        const userValues = {...config};
+        config = config ?? {}; //Make sure to keep the config reference if it's there.
+        return Object.assign(config, this.#getDefaultConfig(), userValues) as CraftManagerRunConfig;
+    }
+
+    private defaultElementSort = (element: CraftElement): number => {
+        // Change the likelihood of using some elements over others.
+        // Smaller number = more likely
+        let sort = getRandomNumber(0, 1000);
+        // Larger words are likely to be more gibberish. The longer, the worse.
+        sort += getRandomNumber(0, element.text.length * 4);
+        // If the game can't figure out what kind of emoji makes sense, it's probably a non-sense word.
+        sort += getRandomNumber(0, element.emoji === '🤔' ? 250 : 0);
+        // Most normal elements will have been discovered. Best to slightly de-prioritize slightly.
+        sort += getRandomNumber(0, element.discovered === true ? 100 : 0);
+        // Numbers combine like rabbits, and make weird combinations. 
+        sort += getRandomNumber(0, this.#hasNumberRegex.test(element.text) ? 100 : 0);
+        //If it's an exact match to a number, *really* deprioritize. 
+        if (this.#numberRegex.test(element.text)) {
+            return sort += 1000;
+        }
+        return sort;
+    } 
 
     #randomizeCraftElements(elements: CraftElement[]): string[] {
         return elements
-            .filter(el => !this.#numberRegex.test(el.text))
-            .map(el => {
-                //Smaller number = more likely
-                let sort = getRandomNumber(0, 1000);
-                //Change the likelihood of using some elements over others.
-                // Larger words are likely to be more gibberish. The longer, the worse.
-                sort += getRandomNumber(0, el.text.length * 3);
-                // If the game can't figure out what kind of emoji makes sense, it's probably a non-sense word.
-                sort += getRandomNumber(0, el.emoji === '🤔' ? 200 : 0);
-                // Most normal elements will have been discovered. Best to slightly de-prioritize slightly.
-                sort += getRandomNumber(0, el.discovered === true ? 50 : 0);
-                // Numbers combine like rabbits, and make weird combinations 
-                sort += getRandomNumber(0, this.#hasNumberRegex.test(el.text) ? 50 : 0);
-                // I don't know if there's something with my data, or if Infinite Craft is just really likes to craft nonsense words with "Jew" in the name.
-                // Either way, I want to de-prioritize it.
-                sort += getRandomNumber(0, (/jew/i).test(el.text) ? 50 : 0); 
-                return {
-                    text: el.text,
-                    sort
-                };
+            .map(element => {
+                let sort = this.managerConfig.elementSort(element);
+                return { element, sort };
             })
+            .filter(sortedElement => (typeof sortedElement.sort === 'number' && !Number.isNaN(sortedElement.sort)))
             .sort((a,b) => a.sort - b.sort)
-            .map(el => el.text);
+            .map(sortedElement => sortedElement.element.text);
     }
 
     async syncStorage() {
+        if (this.managerConfig.skipSync) {
+            return;
+        }
         console.log("Syncing storage...");
         const localElements = this.craftDatabase.getLocalStorageElements();
 
@@ -79,20 +106,22 @@ export class CraftManager {
         console.log("Syncing storage complete.");
     }
 
-    solve(config?: CraftManagerRunConfig): CraftManagerRunConfig {
-        config = config ?? this.#defaultConfig() as CraftManagerRunConfig;
+    solve(userConfig?: CraftManagerRunConfig): CraftManagerRunConfig {
+        const config = this.#mergeUserConfig(userConfig);
 
         config.promise = new Promise(async (resolve, reject) => {
             try {
                 let hasBeenRejected = false;
                 await this.syncStorage();
-                while(config!.continue) {
+                while(config.continue) {
                     const allElements = await this.craftDatabase.getAllElements();
-                    const numberToProcess = Math.max(allElements.length * 0.25, 100)
+                    const numberToProcess = typeof this.managerConfig.numberToProcess === 'function' ?
+                        this.managerConfig.numberToProcess(allElements.length) : 
+                        this.managerConfig.numberToProcess;
                     const firstIds = this.#randomizeCraftElements(allElements).slice(0, numberToProcess);
                     const secondIds = this.#randomizeCraftElements(allElements).slice(0, numberToProcess);
                     for(let i = 0; i < numberToProcess; i++) {
-                        if (!config!.continue) 
+                        if (!config.continue) 
                             break;
                         const firstId = firstIds[i];
                         const secondId = secondIds[i];
@@ -104,12 +133,12 @@ export class CraftManager {
                             }
                             
                             if (!hasBeenRejected) {
-                                config!.continue = false;
+                                config.continue = false;
                                 hasBeenRejected = true;
                                 reject(err);
                             }
                         });
-                        await delay(config!.delay)
+                        await delay(config.delay)
                     }
                     //await Promise.all(promises);
                 }
@@ -125,11 +154,11 @@ export class CraftManager {
             console.error(err);
             if (err instanceof HttpResponseError && err.response.status === 429) {
                 const delayBump = 250;
-                config!.delay += 250;
-                console.log(`Too many requests! Bumping the delay by ${delayBump}ms to ${config!.delay}ms`);
+                config.delay += 250;
+                console.log(`Too many requests! Bumping the delay by ${delayBump}ms to ${config.delay}ms`);
                 const retryAfter = parseInt(err.response.headers.get('retry-after') ?? "300") + 30;
                 await delay(retryAfter * 1000);
-                config!.continue = true;
+                config.continue = true;
                 this.solve(config);
             }
         })
@@ -137,8 +166,8 @@ export class CraftManager {
         return config;
     }
 
-    solveFor(id: string): CraftManagerRunConfig {
-        const config = this.#defaultConfig() as CraftManagerRunConfig;
+    solveFor(id: string, userConfig?: CraftManagerRunConfig): CraftManagerRunConfig {
+        const config = this.#mergeUserConfig(userConfig);
 
         config.promise = new Promise(async (resolve, reject) => {
             try {
@@ -171,7 +200,6 @@ export class CraftManager {
                         });
                         await delay(config.delay)
                     }
-                    //await Promise.all(promises);
                 }
                 await this.syncStorage();
                 resolve(true);
@@ -197,11 +225,14 @@ export class CraftManager {
         await this.craftDatabase.saveCombination({
             first: firstId,
             second: secondId,
-            result: comboResult.result
+            result: {
+                text: comboResult.result,
+                emoji: comboResult.emoji
+            }
         });
         console.log(`Crafted ${comboResult.emoji} ${comboResult.result} - [${firstId}, ${secondId}]`);
 
-        if (comboResult.result && comboResult.result != "Nothing") {
+        if (isValidElementString(comboResult.result)) {
             const resultElement = await this.craftDatabase.getElement(comboResult.result);
             if (!resultElement) {
                 if (comboResult.isNew) {

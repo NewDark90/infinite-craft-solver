@@ -1,5 +1,5 @@
 import { CraftCombination, comboStoreConfig, sortCombination } from "./combo-store.config";
-import { CraftElement, elementsStore } from "./elements-store.config";
+import { CraftElement, LocalStorageCraftElement, elementsStore, isValidElementString, nothingElement } from "./elements-store.config";
 
 
 export interface IDbStats {
@@ -61,11 +61,11 @@ export class CraftDatabase {
         return this.database;
     }
 
-    getLocalStorageElements(): CraftElement[] {
+    getLocalStorageElements(): LocalStorageCraftElement[] {
         return JSON.parse(localStorage['infinite-craft-data']).elements;
     }
 
-    setLocalStorageElements(elements: CraftElement[]){
+    setLocalStorageElements(elements: LocalStorageCraftElement[]){
         localStorage['infinite-craft-data'] = JSON.stringify({
             elements
         });
@@ -201,5 +201,47 @@ export class CraftDatabase {
             elementCount,
             discoveryCount
         };
+    }
+
+    async fixComboData() {
+        const allElements = await this.getAllElements();
+        const elementMap = new Map<string, CraftElement>();
+        allElements.forEach(el => elementMap.set(el.text, el));
+
+        const database = await this.open();
+        const transaction = database.transaction(comboStoreConfig.name, "readwrite");
+        const comboStore = transaction.objectStore(comboStoreConfig.name);
+        
+        const promise = new Promise((resolve, reject) => {
+            const cursorRequest = comboStore.openCursor();
+            cursorRequest.addEventListener('success', (event) => {
+                const cursor = cursorRequest.result;
+                if (!cursor) {
+                    resolve(undefined);
+                    return;
+                }
+                const combo = cursor.value as CraftCombination | null; 
+                if (combo && isValidElementString(combo?.result)) {
+                    const comboResultText = combo?.result as unknown as string;
+                    const element = elementMap.get(comboResultText);
+                    if (!element) {
+                        console.log(`Didn't find '${comboResultText}' in elements.`);
+                        cursor.continue();
+                        return;
+                    }
+                    combo.result = {
+                        emoji: element.emoji,
+                        text: element.text
+                    }
+                    const updateRequest = cursor.update(combo);
+                    updateRequest.addEventListener('success', ()=> { console.log('Fixed', combo); })
+                    updateRequest.addEventListener('error', ()=> { console.log('Broke', combo); })
+                }
+                cursor.continue();
+            });
+            cursorRequest.addEventListener("error", (err) => reject(err));
+        });
+
+        return promise;
     }
 }

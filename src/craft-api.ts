@@ -14,7 +14,7 @@ export class HttpResponseError extends Error {
 
 export class CraftApi {
 
-    #timeout = 1000 * 60 * 5;
+    #timeout = 1000 /*ms*/ * 60 /*sec*/ * 5 /*min*/;
 
     constructor() {
         
