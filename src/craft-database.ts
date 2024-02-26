@@ -221,7 +221,7 @@ export class CraftDatabase {
                     return;
                 }
                 const combo = cursor.value as CraftCombination | null; 
-                if (combo && isValidElementString(combo?.result)) {
+                if (typeof combo?.result === 'string') {
                     const comboResultText = combo?.result as unknown as string;
                     if (comboResultText === nothing.text) {
                         combo.result = {
