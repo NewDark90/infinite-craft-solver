@@ -1,5 +1,3 @@
-import { DbStoreConfig } from "./db-store.config";
-
 export interface CraftElement {
     text: string;
     emoji: string;
@@ -12,13 +10,6 @@ export interface LocalStorageCraftElement {
     emoji: string;
     discovered: boolean;
 }
-
-export const elementsStore: DbStoreConfig = {
-    name: "elements",
-    parameters: {
-        keyPath: 'text'
-    }
-};
 
 export const nothing = {
     text: 'Nothing',

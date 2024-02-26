@@ -1,6 +1,4 @@
-import { CraftCombination, comboStoreConfig, sortCombination } from "./combo-store.config";
-import { CraftElement, LocalStorageCraftElement, elementsStore, isValidElementString, nothing } from "./elements-store.config";
-
+import { CraftElement, comboStoreConfig, elementsStoreConfig, CraftCombination, LocalStorageCraftElement, sortCombination } from "./object-stores";
 
 export interface IDbStats {
     comboCount: number;
@@ -8,32 +6,51 @@ export interface IDbStats {
     discoveryCount: number;
 }
 
+export interface CraftDatabaseConfig {
+    databaseName: string;
+}
+
+const defaultElements: CraftElement[] = [
+    { text: "Water", emoji: '💧', discovered: false },
+    { text: "Fire", emoji: '🔥', discovered: false },
+    { text: "Wind", emoji: '🌬️', discovered: false },
+    { text: "Earth", emoji: '🌍', discovered: false },
+]
+
 export class CraftDatabase {
 
     private readonly version = 3;
-    private readonly databaseName = "craft-db"
     private database?: Promise<IDBDatabase>;
 
-    constructor(
+    private config: CraftDatabaseConfig
 
+    constructor(
+        config?: CraftDatabaseConfig
     ) {
+        const defaultConfig: CraftDatabaseConfig = { 
+            databaseName: 'craft-db'
+        };
+        this.config = {
+            ...defaultConfig,
+            ...config
+        }
     }
 
     async open(): Promise<IDBDatabase> {
         if (!this.database) {
             this.database = new Promise<IDBDatabase>((resolve, reject) => {
-                const openRequest = indexedDB.open(this.databaseName, this.version);
+                const openRequest = indexedDB.open(this.config.databaseName, this.version);
     
                 openRequest.addEventListener("upgradeneeded", (event) => {
                     const database = openRequest.result;
                     console.log(`Upgrading database from ${event.oldVersion} to version ${event.newVersion}`);
                     if (event.oldVersion < 1) {
                          database.createObjectStore(comboStoreConfig.name, comboStoreConfig.parameters);
-                         database.createObjectStore(elementsStore.name, elementsStore.parameters);
+                         database.createObjectStore(elementsStoreConfig.name, elementsStoreConfig.parameters);
                     }
                     if (event.oldVersion < 2) {
                         const comboStore = openRequest.transaction!.objectStore(comboStoreConfig.name);
-                        const elementStore = openRequest.transaction!.objectStore(elementsStore.name);
+                        const elementStore = openRequest.transaction!.objectStore(elementsStoreConfig.name);
                         comboStore.createIndex("first", "first" satisfies keyof CraftCombination, {unique: false});
                         comboStore.createIndex("second", "second" satisfies keyof CraftCombination, {unique: false});
                         comboStore.createIndex("result", "result" satisfies keyof CraftCombination, {unique: false});
@@ -41,7 +58,7 @@ export class CraftDatabase {
                     }
                     if (event.oldVersion < 3) {
                         const comboStore = openRequest.transaction!.objectStore(comboStoreConfig.name);
-                        const elementStore = openRequest.transaction!.objectStore(elementsStore.name);
+                        const elementStore = openRequest.transaction!.objectStore(elementsStoreConfig.name);
                         comboStore.createIndex("createdStamp", "createdStamp" satisfies keyof CraftCombination, {unique: false});
                         elementStore.createIndex("createdStamp", "createdStamp" satisfies keyof CraftElement, {unique: false});
                     }
@@ -73,8 +90,8 @@ export class CraftDatabase {
 
     async getElement(element: string): Promise<CraftElement> {
         const database = await this.open();
-        const transaction = database.transaction(elementsStore.name, "readonly");
-        const elementStore = transaction.objectStore(elementsStore.name);
+        const transaction = database.transaction(elementsStoreConfig.name, "readonly");
+        const elementStore = transaction.objectStore(elementsStoreConfig.name);
         const getPromise = new Promise<CraftElement>(
             (resolve, reject) => {
                 const getRequest: IDBRequest<CraftElement> = elementStore.get(element);
@@ -95,8 +112,8 @@ export class CraftDatabase {
             return;
         }
         const database = await this.open();
-        const transaction = database.transaction(elementsStore.name, "readwrite");
-        const elementStore = transaction.objectStore(elementsStore.name);
+        const transaction = database.transaction(elementsStoreConfig.name, "readwrite");
+        const elementStore = transaction.objectStore(elementsStoreConfig.name);
 
         element.createdStamp = Date.now();
         const savePromise = new Promise<CraftElement>((resolve, reject) => {
@@ -114,8 +131,8 @@ export class CraftDatabase {
     
     async getAllElements(): Promise<CraftElement[]> {
         const database = await this.open();
-        const transaction = database.transaction(elementsStore.name, "readonly");
-        const elementStore = transaction.objectStore(elementsStore.name);
+        const transaction = database.transaction(elementsStoreConfig.name, "readonly");
+        const elementStore = transaction.objectStore(elementsStoreConfig.name);
         
         const getAllPromise = new Promise<CraftElement[]>((resolve, reject) => {
             const getAllRequest: IDBRequest<CraftElement[]> = elementStore.getAll();
@@ -166,9 +183,9 @@ export class CraftDatabase {
 
     async getStats(): Promise<IDbStats> {
         const database = await this.open();
-        const transaction = database.transaction([comboStoreConfig.name, elementsStore.name], "readonly");
+        const transaction = database.transaction([comboStoreConfig.name, elementsStoreConfig.name], "readonly");
         const comboStore = transaction.objectStore(comboStoreConfig.name);
-        const elementStore = transaction.objectStore(elementsStore.name);
+        const elementStore = transaction.objectStore(elementsStoreConfig.name);
         const comboCountPromise = new Promise<number>((resolve, reject) => {
             const request = comboStore.count();
             request.addEventListener("success", (event) => resolve(request.result));
@@ -202,5 +219,4 @@ export class CraftDatabase {
             discoveryCount
         };
     }
-
 }

@@ -1,6 +1,6 @@
 import { CraftApi, HttpResponseError } from "./craft-api";
 import { CraftDatabase } from "./craft-database";
-import { CraftElement, isValidElementString } from "./elements-store.config";
+import { CraftElement, isValidElementString } from "./object-stores";
 import { delay, getRandomNumber } from "./utility";
 
 export interface CraftManagerRunConfig {
