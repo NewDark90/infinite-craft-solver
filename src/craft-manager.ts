@@ -120,11 +120,16 @@ export class CraftManager {
                         this.managerConfig.numberToProcess;
                     const firstIds = this.#randomizeCraftElements(allElements).slice(0, numberToProcess);
                     const secondIds = this.#randomizeCraftElements(allElements).slice(0, numberToProcess);
-                    for(let i = 0; i < numberToProcess; i++) {
+                    for(let i = 0; i < Math.min(firstIds.length, secondIds.length); i++) {
                         if (!config.continue) 
                             break;
                         const firstId = firstIds[i];
                         const secondId = secondIds[i];
+
+                        const elementFromCombo = await this.ensureElementFromCombinations(firstId, secondId);
+                        if (elementFromCombo) {
+                            continue;
+                        }
 
                         this.solveSingle(firstId, secondId).catch((err: Error) => {
                             if (err instanceof DOMException) {
@@ -139,9 +144,7 @@ export class CraftManager {
                             }
                         });
                         await delay(config.delay); 
-                        //TODO don't delay if solved from db.
                     }
-                    //await Promise.all(promises);
                 }
                 await this.syncStorage();
                 resolve(true);
@@ -185,6 +188,11 @@ export class CraftManager {
                         if (!config.continue) 
                             break;
 
+                        const elementFromCombo = await this.ensureElementFromCombinations(firstId, secondId);
+                        if (elementFromCombo) {
+                            continue;
+                        }
+
                         this.solveSingle(firstId, secondId).catch((err: Error) => {
                             let hasBeenRejected = false;
                             this.solveSingle(firstId, secondId).catch((err: Error) => {
@@ -213,24 +221,27 @@ export class CraftManager {
         return config as CraftManagerRunConfig;
     }
 
-    private async solveSingle(firstId: string, secondId: string) {
+    private async ensureElementFromCombinations(firstId: string, secondId: string) {
         const foundCombo = await this.craftDatabase.getCombination(firstId, secondId);
 
         if (foundCombo) {
-            const foundElement = await this.craftDatabase.getElement(foundCombo.result.text);
+            let foundElement = await this.craftDatabase.getElement(foundCombo.result.text);
             if (foundElement) {
-                console.log(`%c Skipping ${firstId}, ${secondId}`, 'font-size: 0.75rem; color: #888888');
+                console.log(`%c Skipping ${firstId}, ${secondId}`, 'font-size: 0.7rem; color: #888888');
             } else {
-                console.log(`%c Saving from combination ${firstId}, ${secondId}`, 'font-size: 0.9rem; color: #EEEEEE');
-                await this.craftDatabase.saveElement({
+                console.log(`%c Saving from combination ${firstId}, ${secondId}`, 'font-size: 0.8rem; color: #AAAAAA');
+                foundElement = {
                     ...foundCombo.result,
                     createdStamp: Date.now()
-                });
+                }
+                await this.craftDatabase.saveElement(foundElement);
             }
 
-            return;
+            return foundElement;
         }
-        
+    }
+
+    private async solveSingle(firstId: string, secondId: string) {
         console.log(`New combination: ${firstId}, ${secondId}...`)
         const comboResult = (await this.craftApi.pair(firstId, secondId)).data;
         await this.craftDatabase.saveCombination({

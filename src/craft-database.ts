@@ -246,6 +246,21 @@ export class CraftDatabase {
         };
     }
 
+    async importElements(other: CraftDatabase) {
+        const otherElements = await other.getAllElements();
+
+        for (const otherElement of otherElements) {
+            const foundElement = await this.getElement(otherElement.text);
+            if (foundElement) {
+                continue;
+            }
+            await this.saveElement({
+                ...otherElement,
+                createdStamp: Date.now()
+            });
+        }
+    }
+
     async importCombinations(other: CraftDatabase) {
         const otherCombos = await other.getAllCombinations();
 
