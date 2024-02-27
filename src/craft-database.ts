@@ -261,6 +261,11 @@ export class CraftDatabase {
         }
     }
 
+    async syncElements(other: CraftDatabase) {
+        await this.importElements(other);
+        await other.importElements(this);
+    }
+
     async importCombinations(other: CraftDatabase) {
         const otherCombos = await other.getAllCombinations();
 
@@ -276,5 +281,10 @@ export class CraftDatabase {
                 createdStamp: Date.now()
             });
         }
+    }
+
+    async syncCombinations(other: CraftDatabase) {
+        await this.importCombinations(other);
+        await other.importCombinations(this);
     }
 }
