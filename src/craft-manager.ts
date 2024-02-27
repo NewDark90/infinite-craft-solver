@@ -146,6 +146,7 @@ export class CraftManager {
                         await delay(config.delay); 
                     }
                 }
+                console.log("Stopping...");
                 await this.syncStorage();
                 resolve(true);
             }
@@ -165,7 +166,8 @@ export class CraftManager {
                 config.continue = true;
                 this.solve(config);
             }
-        })
+        });
+        config.promise.finally(() => console.log("Stopped"));
 
         return config;
     }
@@ -193,23 +195,22 @@ export class CraftManager {
                             continue;
                         }
 
+                        let hasBeenRejected = false;
                         this.solveSingle(firstId, secondId).catch((err: Error) => {
-                            let hasBeenRejected = false;
-                            this.solveSingle(firstId, secondId).catch((err: Error) => {
-                                if (err instanceof DOMException) {
-                                    //Api hit timed out, it's fine.
-                                    return; 
-                                }
-                                
-                                if (!hasBeenRejected) {
-                                    config.continue = false;
-                                    reject(err);
-                                }
-                            });
+                            if (err instanceof DOMException) {
+                                //Api hit timed out, it's fine.
+                                return; 
+                            }
+                            
+                            if (!hasBeenRejected) {
+                                config.continue = false;
+                                reject(err);
+                            }
                         });
                         await delay(config.delay)
                     }
                 }
+                console.log("Stopping...");
                 await this.syncStorage();
                 resolve(true);
             }
@@ -217,6 +218,7 @@ export class CraftManager {
                 reject(err);
             }
         });
+        config.promise.finally(() => console.log("Stopped"));
 
         return config as CraftManagerRunConfig;
     }
@@ -242,7 +244,6 @@ export class CraftManager {
     }
 
     private async solveSingle(firstId: string, secondId: string) {
-        console.log(`New combination: ${firstId}, ${secondId}...`)
         const comboResult = (await this.craftApi.pair(firstId, secondId)).data;
         await this.craftDatabase.saveCombination({
             first: firstId,
