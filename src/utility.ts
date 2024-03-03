@@ -5,3 +5,5 @@ export function delay<T = undefined>(time: number, value?: T) {
 export function getRandomNumber(min: number, max: number) {
     return Math.random() * (max - min) + min;
 }
+
+export const nameof = <T>(name: Extract<keyof T, string>): string => name;

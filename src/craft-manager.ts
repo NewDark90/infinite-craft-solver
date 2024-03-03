@@ -1,6 +1,8 @@
 import { CraftApi, HttpResponseError } from "./craft-api";
-import { CraftDatabase } from "./craft-database";
-import { CraftElement, isValidElementString } from "./object-stores";
+import { CraftDatabase, CraftElement } from "./database/database.interface";
+import { isValidElementString } from "./database/database.util";
+import { IndexedDBCraftDatabase } from "./database/indexed-db/craft-database";
+import { CraftLocalStorage } from "./database/local-storage/local-storage-database";
 import { delay, getRandomNumber } from "./utility";
 
 export interface CraftManagerRunConfig {
@@ -24,10 +26,11 @@ export class CraftManager {
     #hasNumberRegex = /[0-9]+/;
 
     managerConfig: CraftManagerConfig;
+    private craftLocalStorage = new CraftLocalStorage();
 
     constructor(
         managerConfig?: Partial<CraftManagerConfig>,
-        private craftDatabase = new CraftDatabase(),
+        private craftDatabase: CraftDatabase = new IndexedDBCraftDatabase(),
         private craftApi = new CraftApi()
     ) {
         this.managerConfig = this.#mergeConfig(managerConfig);
@@ -87,12 +90,12 @@ export class CraftManager {
             .map(sortedElement => sortedElement.element.text);
     }
 
-    async syncStorage() {
+    async syncLocalStorage() {
         if (this.managerConfig.skipSync) {
             return;
         }
         console.log("Syncing storage...");
-        const localElements = this.craftDatabase.getLocalStorageElements();
+        const localElements = this.craftLocalStorage.getLocalStorageElements();
 
         for (const localElement of localElements) {
             const foundElement = await this.craftDatabase.getElement(localElement.text);
@@ -102,7 +105,7 @@ export class CraftManager {
         }
 
         const allDbElements = await this.craftDatabase.getAllElements();
-        this.craftDatabase.setLocalStorageElements(allDbElements);
+        this.craftLocalStorage.setLocalStorageElements(allDbElements);
         console.log("Syncing storage complete.");
     }
 
@@ -112,7 +115,7 @@ export class CraftManager {
         config.promise = new Promise(async (resolve, reject) => {
             try {
                 let hasBeenRejected = false;
-                await this.syncStorage();
+                await this.syncLocalStorage();
                 while(config.continue) {
                     const allElements = await this.craftDatabase.getAllElements();
                     const numberToProcess = typeof this.managerConfig.numberToProcess === 'function' ?
@@ -147,7 +150,7 @@ export class CraftManager {
                     }
                 }
                 console.log("Stopping...");
-                await this.syncStorage();
+                await this.syncLocalStorage();
                 resolve(true);
             }
             catch(err) {
@@ -177,7 +180,7 @@ export class CraftManager {
 
         config.promise = new Promise(async (resolve, reject) => {
             try {
-                await this.syncStorage();
+                await this.syncLocalStorage();
                 const firstElement = await this.craftDatabase.getElement(id);
                 if (!firstElement) {
                     throw Error(`${id} doesn't exist`);
@@ -211,7 +214,7 @@ export class CraftManager {
                     }
                 }
                 console.log("Stopping...");
-                await this.syncStorage();
+                await this.syncLocalStorage();
                 resolve(true);
             }
             catch(err) {
@@ -245,26 +248,25 @@ export class CraftManager {
 
     private async solveSingle(firstId: string, secondId: string) {
         const comboResult = (await this.craftApi.pair(firstId, secondId)).data;
-        await this.craftDatabase.saveCombination({
-            first: firstId,
-            second: secondId,
-            result: {
-                text: comboResult.result,
-                emoji: comboResult.emoji,
-                discovered: comboResult.isNew,
-                createdStamp: Date.now()
-            }
-        });
+        const elementResult = {
+            text: comboResult.result,
+            discovered: comboResult.isNew,
+            emoji: comboResult.emoji,
+            createdStamp: Date.now()
+        } satisfies CraftElement;
 
         if (isValidElementString(comboResult.result)) {
             const resultElement = await this.craftDatabase.getElement(comboResult.result);
             if (!resultElement) {
-                await this.craftDatabase.saveElement({
-                    text: comboResult.result,
-                    discovered: comboResult.isNew,
-                    emoji: comboResult.emoji,
-                });
+                await this.craftDatabase.saveElement(elementResult);
             }
         }
+
+        await this.craftDatabase.saveCombination({
+            first: firstId,
+            second: secondId,
+            result: elementResult,
+            createdStamp: Date.now()
+        });
     }
 }

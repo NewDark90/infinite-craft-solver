@@ -10,7 +10,9 @@
         "build": "rollup -c ./rollup.config.js"
     },
     "dependencies": {
-        "dotenv": "^16.3.1"
+        "dotenv": "^16.3.1",
+        "promised-sqlite3": "^2.1.0",
+        "sqlite3": "^5.1.7"
     },
     "devDependencies": {
         "@rollup/plugin-commonjs": "^25.0.4",

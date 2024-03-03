@@ -1,33 +1,27 @@
-import { CraftElement, comboStoreConfig, elementsStoreConfig, CraftCombination, LocalStorageCraftElement, sortCombination, nothing } from "./object-stores";
+import { comboStoreConfig, elementsStoreConfig } from ".";
+import { defaultElements, CraftCombination, CraftElement, sortCombination, CraftDatabase } from "..";
 
-export interface IDbStats {
+export interface IndexedDBDbStats {
     comboCount: number;
     elementCount: number;
     discoveryCount: number;
 }
 
-export interface CraftDatabaseConfig {
+export interface IndexedDBCraftDatabaseConfig {
     databaseName: string;
 }
 
-const defaultElements: CraftElement[] = [
-    { text: "Water", emoji: '💧', discovered: false },
-    { text: "Fire", emoji: '🔥', discovered: false },
-    { text: "Wind", emoji: '🌬️', discovered: false },
-    { text: "Earth", emoji: '🌍', discovered: false },
-]
-
-export class CraftDatabase {
+export class IndexedDBCraftDatabase implements CraftDatabase {
 
     private readonly version = 3;
     private database?: Promise<IDBDatabase>;
 
-    private config: CraftDatabaseConfig
+    private config: IndexedDBCraftDatabaseConfig
 
     constructor(
-        config?: CraftDatabaseConfig
+        config?: IndexedDBCraftDatabaseConfig
     ) {
-        const defaultConfig: CraftDatabaseConfig = { 
+        const defaultConfig: IndexedDBCraftDatabaseConfig = { 
             databaseName: 'craft-db'
         };
         this.config = {
@@ -80,16 +74,6 @@ export class CraftDatabase {
         }
         return this.database;
     }
-
-    getLocalStorageElements(): LocalStorageCraftElement[] {
-        return JSON.parse(localStorage['infinite-craft-data']).elements;
-    }
-
-    setLocalStorageElements(elements: LocalStorageCraftElement[]){
-        localStorage['infinite-craft-data'] = JSON.stringify({
-            elements
-        });
-    }
     
     async getAllElements(): Promise<CraftElement[]> {
         const database = await this.open();
@@ -129,7 +113,7 @@ export class CraftDatabase {
 
     async saveElement(element: CraftElement) {
         if (!element) {
-            return;
+            return Promise.resolve(element);
         }
         const database = await this.open();
         const transaction = database.transaction(elementsStoreConfig.name, "readwrite");
@@ -207,7 +191,7 @@ export class CraftDatabase {
         return savePromise;
     }
 
-    async getStats(): Promise<IDbStats> {
+    async getStats(): Promise<IndexedDBDbStats> {
         const database = await this.open();
         const transaction = database.transaction([comboStoreConfig.name, elementsStoreConfig.name], "readonly");
         const comboStore = transaction.objectStore(comboStoreConfig.name);
@@ -246,7 +230,7 @@ export class CraftDatabase {
         };
     }
 
-    async importElements(other: CraftDatabase) {
+    async importElements(other: IndexedDBCraftDatabase) {
         const otherElements = await other.getAllElements();
 
         for (const otherElement of otherElements) {
@@ -261,12 +245,12 @@ export class CraftDatabase {
         }
     }
 
-    async syncElements(other: CraftDatabase) {
+    async syncElements(other: IndexedDBCraftDatabase) {
         await this.importElements(other);
         await other.importElements(this);
     }
 
-    async importCombinations(other: CraftDatabase) {
+    async importCombinations(other: IndexedDBCraftDatabase) {
         const otherCombos = await other.getAllCombinations();
 
         for (const otherCombo of otherCombos) {
@@ -283,7 +267,7 @@ export class CraftDatabase {
         }
     }
 
-    async syncCombinations(other: CraftDatabase) {
+    async syncCombinations(other: IndexedDBCraftDatabase) {
         await this.importCombinations(other);
         await other.importCombinations(this);
     }
