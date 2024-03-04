@@ -1,5 +1,7 @@
-import { comboStoreConfig, elementsStoreConfig } from ".";
-import { defaultElements, CraftCombination, CraftElement, sortCombination, CraftDatabase } from "..";
+import { CraftCombination, CraftDatabase, CraftElement } from "../database.interface";
+import { defaultElements, sortCombination } from "../database.util";
+import { comboStoreConfig } from "./combo-store.config";
+import { elementsStoreConfig } from "./elements-store.config";
 
 export interface IndexedDBDbStats {
     comboCount: number;

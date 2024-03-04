@@ -1,9 +1,11 @@
 
-import { defaultElements, CraftCombination, CraftElement, sortCombination, CraftDatabase } from "..";
-import { Database } from 'sqlite3';
+
 import { AsyncDatabase } from "promised-sqlite3";
-import { nameof } from "../..";
+import { nameof } from "../../utility";
+import { CraftCombination, CraftDatabase, CraftElement } from "../database.interface";
 import { DatabaseCraftCombination, DatabaseCraftElement, FlatCombinationAndResult } from "./sqlite.interface";
+import { defaultElements } from "../database.util";
+
 
 export interface SqliteCraftDatabaseConfig {
     databasePath: string;
