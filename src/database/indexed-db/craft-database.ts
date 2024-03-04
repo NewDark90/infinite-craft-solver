@@ -19,7 +19,7 @@ export class IndexedDBCraftDatabase implements CraftDatabase {
     private config: IndexedDBCraftDatabaseConfig
 
     constructor(
-        config?: IndexedDBCraftDatabaseConfig
+        config?: Partial<IndexedDBCraftDatabaseConfig>
     ) {
         const defaultConfig: IndexedDBCraftDatabaseConfig = { 
             databaseName: 'craft-db'
@@ -228,47 +228,5 @@ export class IndexedDBCraftDatabase implements CraftDatabase {
             elementCount,
             discoveryCount
         };
-    }
-
-    async importElements(other: IndexedDBCraftDatabase) {
-        const otherElements = await other.getAllElements();
-
-        for (const otherElement of otherElements) {
-            const foundElement = await this.getElement(otherElement.text);
-            if (foundElement) {
-                continue;
-            }
-            await this.saveElement({
-                ...otherElement,
-                createdStamp: Date.now()
-            });
-        }
-    }
-
-    async syncElements(other: IndexedDBCraftDatabase) {
-        await this.importElements(other);
-        await other.importElements(this);
-    }
-
-    async importCombinations(other: IndexedDBCraftDatabase) {
-        const otherCombos = await other.getAllCombinations();
-
-        for (const otherCombo of otherCombos) {
-            const foundCombo = await this.getCombination(otherCombo.first, otherCombo.second);
-            if (foundCombo) {
-                continue;
-            }
-            await this.saveCombination({
-                first: otherCombo.first,
-                second: otherCombo.second,
-                result: {...otherCombo.result},
-                createdStamp: Date.now()
-            });
-        }
-    }
-
-    async syncCombinations(other: IndexedDBCraftDatabase) {
-        await this.importCombinations(other);
-        await other.importCombinations(this);
     }
 }

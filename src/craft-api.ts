@@ -23,16 +23,20 @@ export class CraftApi {
     async pair(first: string, second: string): Promise<{ response: Response, data: ApiResult }> {
         const ids = [first, second].sort();
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.#timeout)
-        const response = await fetch(
+        const timeoutId = setTimeout(() => controller.abort(), this.#timeout);
+        const request: Request = new Request(
             `https://neal.fun/api/infinite-craft/pair?first=${encodeURIComponent(ids[0])}&second=${encodeURIComponent(ids[1])}`,
             {
-                signal: controller.signal
+                method: "GET",
+                signal: controller.signal,
             }
         );
+        const response = await fetch(request);
         clearTimeout(timeoutId);
         if (!response.ok) {
-            console.error(response);
+            console.log(request);
+            console.log(response);
+            console.error(await response.text());
             throw new HttpResponseError(response);
         }
 

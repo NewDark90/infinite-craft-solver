@@ -2,7 +2,7 @@ import { CraftApi, HttpResponseError } from "./craft-api";
 import { CraftDatabase, CraftElement } from "./database/database.interface";
 import { isValidElementString } from "./database/database.util";
 import { IndexedDBCraftDatabase } from "./database/indexed-db/craft-database";
-import { CraftLocalStorage } from "./database/local-storage/local-storage-database";
+import { CraftStorage } from "./database/local-storage/local-storage-database";
 import { delay, getRandomNumber } from "./utility";
 
 export interface CraftManagerRunConfig {
@@ -26,7 +26,7 @@ export class CraftManager {
     #hasNumberRegex = /[0-9]+/;
 
     managerConfig: CraftManagerConfig;
-    private craftLocalStorage = new CraftLocalStorage();
+    private craftLocalStorage = new CraftStorage();
 
     constructor(
         managerConfig?: Partial<CraftManagerConfig>,
@@ -91,7 +91,7 @@ export class CraftManager {
     }
 
     async syncLocalStorage() {
-        if (this.managerConfig.skipSync) {
+        if (this.managerConfig.skipSync || !this.craftLocalStorage.isAvailable) {
             return;
         }
         console.log("Syncing storage...");

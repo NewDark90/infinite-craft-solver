@@ -1,19 +1,36 @@
 
-export interface LocalStorageCraftElement {
+export interface StorageCraftElement {
     text: string;
     emoji: string;
     discovered: boolean;
 }
 
 
-export class CraftLocalStorage {
+export class CraftStorage {
 
-    getLocalStorageElements(): LocalStorageCraftElement[] {
-        return JSON.parse(localStorage['infinite-craft-data']).elements;
+    get isAvailable() { return this.storage != null; }
+
+    private storage: Storage | null;
+
+    constructor(
+        storage?: Storage
+    ) {
+        this.storage = storage ??  
+            typeof window !== 'undefined' ? localStorage : null
+    }
+
+    getLocalStorageElements(): StorageCraftElement[] {
+        if (!this.storage) 
+            return [];
+
+        return JSON.parse(this.storage['infinite-craft-data']).elements;
     }
     
-    setLocalStorageElements(elements: LocalStorageCraftElement[]){
-        localStorage['infinite-craft-data'] = JSON.stringify({
+    setLocalStorageElements(elements: StorageCraftElement[]){
+        if (!this.storage)
+            return;
+
+        this.storage['infinite-craft-data'] = JSON.stringify({
             elements
         });
     }

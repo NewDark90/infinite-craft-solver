@@ -15,13 +15,9 @@ export interface CraftElement {
 
 export interface CraftDatabase {
     getAllElements(): Promise<CraftElement[]>;
-    getElement(element: string): Promise<CraftElement>;
+    getElement(element: string): Promise<CraftElement | undefined>;
     saveElement(element: CraftElement): Promise<CraftElement>;
     getAllCombinations(): Promise<CraftCombination[]>;
-    getCombination(first: string, second: string): Promise<CraftCombination>;
+    getCombination(first: string, second: string): Promise<CraftCombination | undefined>;
     saveCombination(combo: CraftCombination): Promise<CraftCombination>;
-    importElements(other: CraftDatabase): Promise<void>;
-    syncElements(other: CraftDatabase): Promise<void>;
-    importCombinations(other: CraftDatabase): Promise<void>;
-    syncCombinations(other: CraftDatabase): Promise<void>;
 }

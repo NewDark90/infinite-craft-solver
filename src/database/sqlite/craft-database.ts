@@ -17,7 +17,7 @@ export class SqliteCraftDatabase implements CraftDatabase {
     private config: SqliteCraftDatabaseConfig;
 
     constructor(
-        config?: SqliteCraftDatabaseConfig
+        config?: Partial<SqliteCraftDatabaseConfig>
     ) {
         const defaultConfig: SqliteCraftDatabaseConfig = { 
             databasePath: 'infinite-craft.db'
@@ -43,31 +43,56 @@ export class SqliteCraftDatabase implements CraftDatabase {
     }
 
     private async initDb(database: AsyncDatabase) {
-        const version = await database.get<number>(`PRAGMA user_version;`);
-        if (version < 1) {
-            await database.run(`CREATE TABLE IF NOT EXISTS ${this.#elementTable} (
-                ${nameof<DatabaseCraftElement>('text')} TEXT NOT NULL,
-                ${nameof<DatabaseCraftElement>('emoji')} TEXT NULL,
-                ${nameof<DatabaseCraftElement>('discovered')} BOOLEAN NOT NULL CHECK (${nameof<DatabaseCraftElement>('discovered')} IN (0, 1) DEFAULT (0)),
-                ${nameof<DatabaseCraftElement>('createdStamp')} INTEGER NOT NULL,
-                PRIMARY KEY(${nameof<DatabaseCraftElement>('text')})
-            );
-            CREATE INDEX ix_${this.#elementTable}_${nameof<DatabaseCraftElement>('createdStamp')} ON ${this.#elementTable} (${nameof<DatabaseCraftElement>('createdStamp')});
-            `);
+        const pragma = await database.get<{user_version: number}>(`PRAGMA user_version;`);
+        if (pragma.user_version < 1) {
+            const createElementTableSql = `
+                CREATE TABLE IF NOT EXISTS ${this.#elementTable} (
+                    ${nameof<DatabaseCraftElement>('text')} TEXT NOT NULL,
+                    ${nameof<DatabaseCraftElement>('emoji')} TEXT NULL,
+                    ${nameof<DatabaseCraftElement>('discovered')} BOOLEAN NOT NULL CHECK (${nameof<DatabaseCraftElement>('discovered')} IN (0, 1)) DEFAULT (0),
+                    ${nameof<DatabaseCraftElement>('createdStamp')} INTEGER NOT NULL,
+                    PRIMARY KEY(${nameof<DatabaseCraftElement>('text')})
+                );
+                CREATE INDEX ix_${this.#elementTable}_${nameof<DatabaseCraftElement>('createdStamp')} ON ${this.#elementTable} (${nameof<DatabaseCraftElement>('createdStamp')});
+            `;
+            await database.run(createElementTableSql);
 
-            await database.run(`CREATE TABLE IF NOT EXISTS ${this.#combinationTable} (
-                ${nameof<DatabaseCraftCombination>('first')} TEXT NOT NULL,
+            const createCombinationTableSql = `
+                CREATE TABLE IF NOT EXISTS ${this.#combinationTable} (
+                    ${nameof<DatabaseCraftCombination>('first')} TEXT NOT NULL,
+                    ${nameof<DatabaseCraftCombination>('second')} TEXT NOT NULL,
+                    ${nameof<DatabaseCraftCombination>('result')} TEXT NOT NULL,
+                    ${nameof<DatabaseCraftCombination>('createdStamp')} INTEGER NOT NULL,
+                    PRIMARY KEY(${nameof<DatabaseCraftCombination>('first')}, ${nameof<DatabaseCraftCombination>('second')}),
                     FOREIGN KEY(${nameof<DatabaseCraftCombination>('first')}) REFERENCES ${this.#elementTable}(${nameof<DatabaseCraftElement>('text')}),
-                ${nameof<DatabaseCraftCombination>('second')} TEXT NOT NULL,
                     FOREIGN KEY(${nameof<DatabaseCraftCombination>('second')}) REFERENCES ${this.#elementTable}(${nameof<DatabaseCraftElement>('text')}),
-                ${nameof<DatabaseCraftCombination>('result')} TEXT NOT NULL,
-                    FOREIGN KEY(${nameof<DatabaseCraftCombination>('result')}) REFERENCES ${this.#elementTable}(${nameof<DatabaseCraftElement>('text')}),
-                ${nameof<DatabaseCraftCombination>('createdStamp')} INTEGER NOT NULL,
-                PRIMARY KEY(${nameof<DatabaseCraftCombination>('first')}, ${nameof<DatabaseCraftCombination>('second')}),
-            );
-            CREATE INDEX ix_${this.#combinationTable}_${nameof<DatabaseCraftCombination>('result')} ON ${this.#combinationTable} (${nameof<DatabaseCraftCombination>('result')});
-            CREATE INDEX ix_${this.#combinationTable}_${nameof<DatabaseCraftCombination>('createdStamp')} ON ${this.#combinationTable} (${nameof<DatabaseCraftCombination>('createdStamp')});
-            `);
+                    FOREIGN KEY(${nameof<DatabaseCraftCombination>('result')}) REFERENCES ${this.#elementTable}(${nameof<DatabaseCraftElement>('text')})
+                );
+                CREATE INDEX ix_${this.#combinationTable}_${nameof<DatabaseCraftCombination>('result')} ON ${this.#combinationTable} (${nameof<DatabaseCraftCombination>('result')});
+                CREATE INDEX ix_${this.#combinationTable}_${nameof<DatabaseCraftCombination>('createdStamp')} ON ${this.#combinationTable} (${nameof<DatabaseCraftCombination>('createdStamp')});
+            `;
+            await database.run(createCombinationTableSql);
+
+            const defaultPromises = defaultElements.map(async defaultElement => {
+                const defaultInsertSql = `
+                    INSERT OR IGNORE INTO ${this.#elementTable}(
+                        ${nameof<CraftElement>('text')},
+                        ${nameof<CraftElement>('emoji')},
+                        ${nameof<CraftElement>('discovered')},
+                        ${nameof<CraftElement>('createdStamp')}
+                    )
+                    VALUES($text,$emoji,$discovered,$createdStamp);
+                `;
+                await database.run(defaultInsertSql,
+                    { 
+                        $text: defaultElement.text,
+                        $emoji: defaultElement.emoji,
+                        $discovered: false,
+                        $createdStamp: Date.now()
+                    }
+                );
+            });
+            await Promise.all(defaultPromises);
         }
         await database.exec(`PRAGMA user_version = ${this.#version};`);
     }
@@ -78,13 +103,13 @@ export class SqliteCraftDatabase implements CraftDatabase {
         });
     }
 
-    async getElement(element: string): Promise<CraftElement> {
+    async getElement(element: string): Promise<CraftElement | undefined> {
         return await this.useDb(async (database) => {
-            return await database.get<CraftElement>(`
+            return (await database.get<CraftElement>(`
                 SELECT * FROM ${this.#elementTable} 
                 WHERE ${nameof<CraftElement>('text')} = $text;`,
                 { $text: element }
-            )
+            )) ?? null
         });
     }
 
@@ -125,14 +150,16 @@ export class SqliteCraftDatabase implements CraftDatabase {
             const results = await database.all<FlatCombinationAndResult>(`
                 ${this.selectFlatCombinationSql()}
             ;`);
-            return results.map(result => this.convertFlatCombinationToRegular(result));
+            return results
+                .filter(result => result != null)
+                .map(result => this.convertFlatCombinationToRegular(result) as CraftCombination);
         });
     }
 
-    async getCombination(first: string, second: string): Promise<CraftCombination> {
+    async getCombination(first: string, second: string): Promise<CraftCombination | undefined> {
         const ids = [first, second].sort();
         return await this.useDb(async (database) => {
-            const results = await database.get<FlatCombinationAndResult>(`
+            const result = await database.get<FlatCombinationAndResult>(`
                 ${this.selectFlatCombinationSql()}
                 WHERE 
                     ${nameof<CraftCombination>('first')} = $first AND 
@@ -140,7 +167,7 @@ export class SqliteCraftDatabase implements CraftDatabase {
                 ;`,
                 { $first: ids[0], $second: ids[1] }
             );
-            return this.convertFlatCombinationToRegular(results);
+            return this.convertFlatCombinationToRegular(result);
         });
     }
 
@@ -159,7 +186,10 @@ export class SqliteCraftDatabase implements CraftDatabase {
         `;
     }
 
-    private convertFlatCombinationToRegular(combo: FlatCombinationAndResult): CraftCombination {
+    private convertFlatCombinationToRegular(combo: FlatCombinationAndResult): CraftCombination | undefined {
+        if (!combo) {
+            return undefined;
+        }
         return {
             first: combo.first,
             second: combo.second,
@@ -198,47 +228,5 @@ export class SqliteCraftDatabase implements CraftDatabase {
             console.log(`New Combination: [${combo.first}, ${combo.second}] => ${combo.result.emoji} ${combo.result.text}`);
             return combo;
         });
-    }
-
-    async importElements(other: CraftDatabase) {
-        const otherElements = await other.getAllElements();
-
-        for (const otherElement of otherElements) {
-            const foundElement = await this.getElement(otherElement.text);
-            if (foundElement) {
-                continue;
-            }
-            await this.saveElement({
-                ...otherElement,
-                createdStamp: Date.now()
-            });
-        }
-    }
-
-    async syncElements(other: CraftDatabase) {
-        await this.importElements(other);
-        await other.importElements(this);
-    }
-
-    async importCombinations(other: CraftDatabase) {
-        const otherCombos = await other.getAllCombinations();
-
-        for (const otherCombo of otherCombos) {
-            const foundCombo = await this.getCombination(otherCombo.first, otherCombo.second);
-            if (foundCombo) {
-                continue;
-            }
-            await this.saveCombination({
-                first: otherCombo.first,
-                second: otherCombo.second,
-                result: {...otherCombo.result},
-                createdStamp: Date.now()
-            });
-        }
-    }
-
-    async syncCombinations(other: CraftDatabase) {
-        await this.importCombinations(other);
-        await other.importCombinations(this);
     }
 }
